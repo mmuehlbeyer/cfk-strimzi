@@ -1,0 +1,84 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: strimzi-topic-operator-cc
+  labels:
+    app: strimzi
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      name: strimzi-topic-operator-cc
+  template:
+    metadata:
+      labels:
+        name: strimzi-topic-operator-cc
+    spec:
+      serviceAccountName: strimzi-topic-operator
+      volumes:
+        - name: strimzi-tmp
+          emptyDir:
+            medium: Memory
+            sizeLimit: 5Mi
+      containers:
+        - name: strimzi-topic-operator-cc
+          image: quay.io/strimzi/operator:0.41.0
+          args:
+            - /opt/strimzi/bin/topic_operator_run.sh
+          volumeMounts:
+            - name: strimzi-tmp
+              mountPath: /tmp
+          env:
+            - name: STRIMZI_RESOURCE_LABELS
+              value: "strimzi.io/cluster=cc-cluster"
+            - name: STRIMZI_KAFKA_BOOTSTRAP_SERVERS
+              value: pkc-75m1o.europe-west3.gcp.confluent.cloud:9092
+            - name: STRIMZI_FULL_RECONCILIATION_INTERVAL_MS
+              value: "120000"
+            - name: STRIMZI_LOG_LEVEL
+              value: INFO
+            - name: STRIMZI_TLS_ENABLED
+              value: "false"
+            - name: STRIMZI_SASL_ENABLED
+              value: "true"              
+            - name: STRIMZI_TLS_AUTH_ENABLED
+              value: "false"  
+            - name: STRIMZI_SECURITY_PROTOCOL
+              value: SSL              
+            - name: STRIMZI_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace                 
+            - name: STRIMZI_SKIP_CLUSTER_CONFIG_REVIEW # (1)
+              value: "true"   
+            - name: STRIMZI_PUBLIC_CA 
+              value: "true"                            
+            - name: STRIMZI_SASL_CUSTOM_CONFIG_JSON 
+              value: |
+                {
+                  "sasl.mechanism": "PLAIN",
+                  "sasl.security.protocol": "SASL_SSL",
+                  "sasl.bootstrap.servers": "pkc-75m1o.europe-west3.gcp.confluent.cloud:9092",
+                  "sasl.jaas.config": "org.apache.kafka.common.security.plain.PlainLoginModule required username='AC3HUQAWH2ZGBMO2' password='sH6ebHOZ8xNgQbdIOr0LHkkz99S6bjYKdNbwBsbZHzb9FKfoulo2fO/9f8wI1yaY';"
+                }                         
+          livenessProbe:
+            httpGet:
+              path: /healthy
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 30
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 30
+          resources:
+            limits:
+              memory: 256Mi
+              cpu: 500m
+            requests:
+              memory: 256Mi
+              cpu: 100m
+  strategy:
+    type: Recreate
